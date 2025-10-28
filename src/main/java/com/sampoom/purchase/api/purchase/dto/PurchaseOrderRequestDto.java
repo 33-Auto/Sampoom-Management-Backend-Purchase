@@ -19,7 +19,6 @@ public class PurchaseOrderRequestDto {
     private String factoryName;
 
     @JsonFormat(pattern = "yyyy-MM-dd")
-    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
     private LocalDate requiredAt;
 
     private String requesterName; // 요청자 이름 추가

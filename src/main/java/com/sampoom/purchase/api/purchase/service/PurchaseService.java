@@ -21,6 +21,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -92,9 +93,17 @@ public class PurchaseService {
     public PageResponseDto<PurchaseOrderResponseDto> getOrders(OrderStatus status, UrgencyLevel urgency, String query, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "orderAt"));
         Page<PurchaseOrder> pageResult = orderRepository.search(status, urgency, query, pageable);
-        List<PurchaseOrderResponseDto> content = pageResult.getContent().stream()
-                .map(order -> PurchaseOrderResponseDto.from(order, orderItemRepository.findByPurchaseOrderId(order.getId())))
-                .collect(Collectors.toList());
+        List<Long> orderIds = pageResult.getContent().stream()
+                                .map(PurchaseOrder::getId).toList();
+                List<PurchaseOrderItem> allItems =
+                                orderItemRepository.findByPurchaseOrderIdIn(orderIds);
+                Map<Long, List<PurchaseOrderItem>> itemsByOrderId = allItems.stream()
+                                .collect(Collectors.groupingBy(i -> i.getPurchaseOrder().getId()));
+                List<PurchaseOrderResponseDto> content = pageResult.getContent().stream()
+                                .map(order -> PurchaseOrderResponseDto.from(
+                                        order,
+                                        itemsByOrderId.getOrDefault(order.getId(), java.util.Collections.emptyList())))
+                                .collect(Collectors.toList());
         return PageResponseDto.<PurchaseOrderResponseDto>builder()
                 .content(content)
                 .totalElements(pageResult.getTotalElements())
@@ -102,7 +111,7 @@ public class PurchaseService {
                 .build();
     }
 
-    
+
 
     @Transactional
     public PurchaseOrderResponseDto cancelOrder(Long orderId) {
