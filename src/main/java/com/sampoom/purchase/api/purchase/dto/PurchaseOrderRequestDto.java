@@ -7,7 +7,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Getter
@@ -18,8 +18,7 @@ public class PurchaseOrderRequestDto {
     private Long factoryId;
     private String factoryName;
 
-    @JsonFormat(pattern = "yyyy-MM-dd")
-    private LocalDate requiredAt;
+    private LocalDateTime requiredAt;
 
     private String requesterName; // 요청자 이름 추가
 

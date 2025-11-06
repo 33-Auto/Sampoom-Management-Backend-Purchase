@@ -38,6 +38,13 @@ public class PurchaseController {
         return ApiResponse.success(SuccessStatus.OK, purchaseService.cancelOrder(orderId));
     }
 
+    @Operation(summary = "자재 주문 입고 처리", description = "주문된 자재를 입고 처리합니다.")
+    @PatchMapping("/{orderId}/receive")
+    public ResponseEntity<ApiResponse<PurchaseOrderResponseDto>> receiveOrder(
+            @PathVariable Long orderId) {
+        return ApiResponse.success(SuccessStatus.OK, purchaseService.receiveOrder(orderId));
+    }
+
     @Operation(summary = "자재 주문 삭제", description = "주문을 삭제합니다(소프트 삭제).")
     @DeleteMapping("/{orderId}")
     public ResponseEntity<ApiResponse<Void>> deleteOrder(
