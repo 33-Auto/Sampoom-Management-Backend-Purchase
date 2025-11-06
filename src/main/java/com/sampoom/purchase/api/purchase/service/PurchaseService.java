@@ -5,6 +5,7 @@ import com.sampoom.purchase.api.purchase.dto.PurchaseOrderResponseDto;
 import com.sampoom.purchase.api.purchase.entity.*;
 import com.sampoom.purchase.api.purchase.repository.PurchaseOrderItemRepository;
 import com.sampoom.purchase.api.purchase.repository.PurchaseOrderRepository;
+import com.sampoom.purchase.common.event.PurchaseEventService;
 import com.sampoom.purchase.common.exception.NotFoundException;
 import com.sampoom.purchase.common.response.ErrorStatus;
 import com.sampoom.purchase.common.response.PageResponseDto;
@@ -30,6 +31,7 @@ public class PurchaseService {
 
     private final PurchaseOrderRepository orderRepository;
     private final PurchaseOrderItemRepository orderItemRepository;
+    private final PurchaseEventService purchaseEventService;
 
     @Transactional
     public PurchaseOrderResponseDto createMaterialOrder(PurchaseOrderRequestDto requestDto) {
@@ -43,6 +45,16 @@ public class PurchaseService {
         // 긴급도 계산: 오늘과 필요일 차이 기준
         UrgencyLevel urgency = calculateUrgency(requestDto.getRequiredAt());
 
+        // 최대 리드타임 계산: 자재들 중 가장 긴 리드타임
+        Integer maxLeadTime = requestDto.getItems() == null ? 0 :
+                requestDto.getItems().stream()
+                        .mapToInt(item -> item.getLeadTimeDays() == null ? 0 : item.getLeadTimeDays())
+                        .max()
+                        .orElse(0);
+
+        // 예정일 계산: 주문일 + 최대 리드타임
+        LocalDateTime expectedDeliveryAt = LocalDateTime.now().plusDays(maxLeadTime);
+
         PurchaseOrder order = PurchaseOrder.builder()
                 .code(generateOrderCode())
                 .factoryId(requestDto.getFactoryId())
@@ -50,6 +62,7 @@ public class PurchaseService {
                 .orderAt(LocalDateTime.now())
                 .factoryName(requestDto.getFactoryName())
                 .requiredAt(requestDto.getRequiredAt())
+                .expectedDeliveryAt(expectedDeliveryAt)
                 .requesterName(requestDto.getRequesterName())
                 .expectedAmount(expectedAmount)
                 .urgency(urgency)
@@ -57,25 +70,50 @@ public class PurchaseService {
 
         orderRepository.save(order);
 
+        // lambda에서 사용하기 위해 final 변수로 복사
+        final PurchaseOrder savedOrder = order;
+
         List<PurchaseOrderItem> orderItems = requestDto.getItems().stream()
                 .map(itemDto -> PurchaseOrderItem.builder()
-                        .purchaseOrder(order)
+                        .purchaseOrder(savedOrder)
                         .materialCode(itemDto.getMaterialCode())
                         .materialName(itemDto.getMaterialName())
                         .unit(itemDto.getUnit())
                         .quantity(itemDto.getQuantity())
                         .unitPrice(itemDto.getUnitPrice())
+                        .leadTimeDays(itemDto.getLeadTimeDays())
                         .build())
                 .collect(Collectors.toList());
 
         orderItemRepository.saveAll(orderItems);
 
-        return PurchaseOrderResponseDto.from(order, orderItems);
+        // order에 items 설정 (이벤트에서 사용하기 위해)
+        PurchaseOrder orderWithItems = PurchaseOrder.builder()
+                .id(savedOrder.getId())
+                .code(savedOrder.getCode())
+                .factoryId(savedOrder.getFactoryId())
+                .factoryName(savedOrder.getFactoryName())
+                .status(savedOrder.getStatus())
+                .orderAt(savedOrder.getOrderAt())
+                .receivedAt(savedOrder.getReceivedAt())
+                .canceledAt(savedOrder.getCanceledAt())
+                .requiredAt(savedOrder.getRequiredAt())
+                .expectedDeliveryAt(savedOrder.getExpectedDeliveryAt())
+                .requesterName(savedOrder.getRequesterName())
+                .expectedAmount(savedOrder.getExpectedAmount())
+                .urgency(savedOrder.getUrgency())
+                .items(orderItems)
+                .build();
+
+        // 주문 생성 이벤트 발행
+        purchaseEventService.recordOrderCreated(orderWithItems);
+
+        return PurchaseOrderResponseDto.from(savedOrder, orderItems);
     }
 
-    private UrgencyLevel calculateUrgency(LocalDate requiredAt) {
+    private UrgencyLevel calculateUrgency(LocalDateTime requiredAt) {
         if (requiredAt == null) return UrgencyLevel.LOW;
-        long days = ChronoUnit.DAYS.between(LocalDate.now(), requiredAt);
+        long days = ChronoUnit.DAYS.between(LocalDateTime.now(), requiredAt);
         if (days <= 1) return UrgencyLevel.HIGH;
         if (days <= 3) return UrgencyLevel.MEDIUM;
         return UrgencyLevel.LOW;
@@ -119,7 +157,31 @@ public class PurchaseService {
                 .orElseThrow(() -> new NotFoundException(ErrorStatus.ORDER_NOT_FOUND));
         order.cancel();
         orderRepository.save(order);
+
+        // items 로드하여 이벤트에 포함
         List<PurchaseOrderItem> items = orderItemRepository.findByPurchaseOrderId(orderId);
+
+        // order에 items 설정
+        order = PurchaseOrder.builder()
+                .id(order.getId())
+                .code(order.getCode())
+                .factoryId(order.getFactoryId())
+                .factoryName(order.getFactoryName())
+                .status(order.getStatus())
+                .orderAt(order.getOrderAt())
+                .receivedAt(order.getReceivedAt())
+                .canceledAt(order.getCanceledAt())
+                .requiredAt(order.getRequiredAt())
+                .expectedDeliveryAt(order.getExpectedDeliveryAt())
+                .requesterName(order.getRequesterName())
+                .expectedAmount(order.getExpectedAmount())
+                .urgency(order.getUrgency())
+                .items(items)
+                .build();
+
+        // 주문 취소 이벤트 발행
+        purchaseEventService.recordOrderCanceled(order);
+
         return PurchaseOrderResponseDto.from(order, items);
     }
 
@@ -127,12 +189,71 @@ public class PurchaseService {
     public void deleteOrder(Long orderId) {
         PurchaseOrder order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new NotFoundException(ErrorStatus.ORDER_NOT_FOUND));
+
+        // items 로드하여 이벤트에 포함
+        List<PurchaseOrderItem> items = orderItemRepository.findByPurchaseOrderId(orderId);
+
+        // order에 items 설정
+        order = PurchaseOrder.builder()
+                .id(order.getId())
+                .code(order.getCode())
+                .factoryId(order.getFactoryId())
+                .factoryName(order.getFactoryName())
+                .status(order.getStatus())
+                .orderAt(order.getOrderAt())
+                .receivedAt(order.getReceivedAt())
+                .canceledAt(order.getCanceledAt())
+                .requiredAt(order.getRequiredAt())
+                .expectedDeliveryAt(order.getExpectedDeliveryAt())
+                .requesterName(order.getRequesterName())
+                .expectedAmount(order.getExpectedAmount())
+                .urgency(order.getUrgency())
+                .items(items)
+                .build();
+
+        // 주문 삭제 이벤트 발행
+        purchaseEventService.recordOrderDeleted(order);
+
         orderRepository.delete(order);
+    }
+
+    @Transactional
+    public PurchaseOrderResponseDto receiveOrder(Long orderId) {
+        PurchaseOrder order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new NotFoundException(ErrorStatus.ORDER_NOT_FOUND));
+        order.receive();
+        orderRepository.save(order);
+
+        // items 로드하여 이벤트에 포함
+        List<PurchaseOrderItem> items = orderItemRepository.findByPurchaseOrderId(orderId);
+
+        // order에 items 설정
+        order = PurchaseOrder.builder()
+                .id(order.getId())
+                .code(order.getCode())
+                .factoryId(order.getFactoryId())
+                .factoryName(order.getFactoryName())
+                .status(order.getStatus())
+                .orderAt(order.getOrderAt())
+                .receivedAt(order.getReceivedAt())
+                .canceledAt(order.getCanceledAt())
+                .requiredAt(order.getRequiredAt())
+                .expectedDeliveryAt(order.getExpectedDeliveryAt())
+                .requesterName(order.getRequesterName())
+                .expectedAmount(order.getExpectedAmount())
+                .urgency(order.getUrgency())
+                .items(items)
+                .build();
+
+        // 자재 입고 처리 이벤트 발행
+        purchaseEventService.recordOrderReceived(order);
+
+        return PurchaseOrderResponseDto.from(order, items);
     }
 
     private String generateOrderCode() {
         String datePart = java.time.LocalDate.now()
-                .format(java.time.format.DateTimeFormatter.BASIC_ISO_DATE); // YYYYMMDD
+                .format(java.time.format.DateTimeFormatter.ofPattern("yyyy")); // YYYY만 사용
         String prefix = "ORD-" + datePart + "-";
 
         String lastCode = orderRepository

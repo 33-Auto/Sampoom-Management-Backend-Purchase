@@ -1,6 +1,5 @@
 package com.sampoom.purchase.api.purchase.dto;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
 import com.sampoom.purchase.api.purchase.entity.OrderStatus;
 import com.sampoom.purchase.api.purchase.entity.PurchaseOrder;
 import com.sampoom.purchase.api.purchase.entity.PurchaseOrderItem;
@@ -25,8 +24,9 @@ public class PurchaseOrderResponseDto {
     private String orderCode;
     private LocalDateTime orderAt;
 
-    @JsonFormat(pattern = "yyyy-MM-dd")
-    private LocalDate requiredAt; // 날짜만
+    private LocalDateTime requiredAt;
+
+    private LocalDateTime expectedDeliveryAt;
 
     private Long factoryId;
     private String factoryName;
@@ -43,6 +43,7 @@ public class PurchaseOrderResponseDto {
                 .orderCode(order.getCode())
                 .orderAt(order.getOrderAt())
                 .requiredAt(order.getRequiredAt())
+                .expectedDeliveryAt(order.getExpectedDeliveryAt())
                 .factoryId(order.getFactoryId())
                 .factoryName(order.getFactoryName())
                 .requesterName(order.getRequesterName())

@@ -31,4 +31,6 @@ public class PurchaseOrderItem {
 
     @Column(precision = 19, scale = 2)
     private BigDecimal unitPrice;
+
+    private Integer leadTimeDays; // 자재 리드타임 (일 단위)
 }

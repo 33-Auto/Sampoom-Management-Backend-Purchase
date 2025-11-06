@@ -18,6 +18,7 @@ public class PurchaseOrderItemDto {
     private String unit;
     private Long quantity;
     private BigDecimal unitPrice;
+    private Integer leadTimeDays; // 자재 리드타임 (일 단위)
 
     public static PurchaseOrderItemDto from(PurchaseOrderItem item) {
         return PurchaseOrderItemDto.builder()
@@ -26,6 +27,7 @@ public class PurchaseOrderItemDto {
                 .unit(item.getUnit())
                 .quantity(item.getQuantity())
                 .unitPrice(item.getUnitPrice())
+                .leadTimeDays(item.getLeadTimeDays())
                 .build();
     }
 }

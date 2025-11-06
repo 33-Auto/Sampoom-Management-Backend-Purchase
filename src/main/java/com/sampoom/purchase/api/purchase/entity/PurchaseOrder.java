@@ -9,8 +9,8 @@ import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.SQLRestriction;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Entity
 @Getter
@@ -31,7 +31,8 @@ public class PurchaseOrder extends SoftDeleteEntity {
     private LocalDateTime orderAt;
     private LocalDateTime receivedAt;
     private LocalDateTime canceledAt;
-    private LocalDate requiredAt;
+    private LocalDateTime requiredAt;
+    private LocalDateTime expectedDeliveryAt; // 예정일 (주문일 + 최대 리드타임)
 
 
     @Enumerated(EnumType.STRING)
@@ -49,6 +50,9 @@ public class PurchaseOrder extends SoftDeleteEntity {
 
     @Column(precision = 19, scale = 2)
     private BigDecimal expectedAmount; // 예상 금액
+
+    @OneToMany(mappedBy = "purchaseOrder", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    private List<PurchaseOrderItem> items;
 
     public void receive() {
         if (this.status != OrderStatus.ORDERED) {
