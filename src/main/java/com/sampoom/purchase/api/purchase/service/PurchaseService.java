@@ -18,7 +18,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -45,15 +44,15 @@ public class PurchaseService {
         // 긴급도 계산: 오늘과 필요일 차이 기준
         UrgencyLevel urgency = calculateUrgency(requestDto.getRequiredAt());
 
-        // 최대 리드타임 계산: 자재들 중 가장 긴 리드타임
-        Integer maxLeadTime = requestDto.getItems() == null ? 0 :
+        // 최대 계산된 리드타임 계산: (quantity/standardQuantity) * leadTimeDays 공식 적용
+        Integer maxCalculatedLeadTime = requestDto.getItems() == null ? 0 :
                 requestDto.getItems().stream()
-                        .mapToInt(item -> item.getLeadTimeDays() == null ? 0 : item.getLeadTimeDays())
+                        .mapToInt(item -> calculateItemLeadTime(item))
                         .max()
                         .orElse(0);
 
-        // 예정일 계산: 주문일 + 최대 리드타임
-        LocalDateTime expectedDeliveryAt = LocalDateTime.now().plusDays(maxLeadTime);
+        // 예정일 계산: 주문일 + 최대 계산된 리드타임
+        LocalDateTime expectedDeliveryAt = LocalDateTime.now().plusDays(maxCalculatedLeadTime);
 
         PurchaseOrder order = PurchaseOrder.builder()
                 .code(generateOrderCode())
@@ -80,6 +79,7 @@ public class PurchaseService {
                         .materialName(itemDto.getMaterialName())
                         .unit(itemDto.getUnit())
                         .quantity(itemDto.getQuantity())
+                        .standardQuantity(itemDto.getStandardQuantity())
                         .unitPrice(itemDto.getUnitPrice())
                         .leadTimeDays(itemDto.getLeadTimeDays())
                         .build())
@@ -109,6 +109,20 @@ public class PurchaseService {
         purchaseEventService.recordOrderCreated(orderWithItems);
 
         return PurchaseOrderResponseDto.from(savedOrder, orderItems);
+    }
+
+    /**
+     * 개별 아이템의 계산된 리드타임 구하기
+     * (quantity/standardQuantity) * leadTimeDays 공식 적용
+     */
+    private int calculateItemLeadTime(com.sampoom.purchase.api.purchase.dto.PurchaseOrderItemDto item) {
+        if (item.getStandardQuantity() == null || item.getStandardQuantity() == 0
+            || item.getLeadTimeDays() == null || item.getQuantity() == null) {
+            return item.getLeadTimeDays() == null ? 0 : item.getLeadTimeDays();
+        }
+
+        double ratio = (double) item.getQuantity() / item.getStandardQuantity();
+        return (int) Math.ceil(ratio * item.getLeadTimeDays());
     }
 
     private UrgencyLevel calculateUrgency(LocalDateTime requiredAt) {
