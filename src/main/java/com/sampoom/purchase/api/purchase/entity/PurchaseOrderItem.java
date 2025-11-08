@@ -19,6 +19,8 @@ public class PurchaseOrderItem {
 
     private Long quantity;
 
+    private Long standardQuantity; // 표준 수량
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "purchase_order_id")
     private PurchaseOrder purchaseOrder;
