@@ -267,8 +267,8 @@ public class PurchaseService {
 
     private String generateOrderCode() {
         String datePart = java.time.LocalDate.now()
-                .format(java.time.format.DateTimeFormatter.ofPattern("yyyy")); // YYYY만 사용
-        String prefix = "ORD-" + datePart + "-";
+                .format(java.time.format.DateTimeFormatter.ofPattern("yyMMdd")); // YYMMDD 형식으로 변경
+        String prefix = "PR-" + datePart + "-";
 
         String lastCode = orderRepository
                 .findTopByCodeStartingWithOrderByCodeDesc(prefix)
