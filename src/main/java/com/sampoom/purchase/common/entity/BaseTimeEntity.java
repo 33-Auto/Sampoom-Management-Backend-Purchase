@@ -1,4 +1,4 @@
-package com.sampoom.purchase.common.entitiy;
+package com.sampoom.purchase.common.entity;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.persistence.Column;
