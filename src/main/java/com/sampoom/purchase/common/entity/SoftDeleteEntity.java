@@ -1,4 +1,4 @@
-package com.sampoom.purchase.common.entitiy;
+package com.sampoom.purchase.common.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.MappedSuperclass;

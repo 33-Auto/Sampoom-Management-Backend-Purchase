@@ -1,6 +1,6 @@
 package com.sampoom.purchase.api.purchase.entity;
 
-import com.sampoom.purchase.common.entitiy.SoftDeleteEntity;
+import com.sampoom.purchase.common.entity.SoftDeleteEntity;
 import com.sampoom.purchase.common.exception.BadRequestException;
 import com.sampoom.purchase.common.response.ErrorStatus;
 import jakarta.persistence.*;
