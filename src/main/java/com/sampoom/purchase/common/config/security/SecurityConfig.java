@@ -36,7 +36,7 @@ public class SecurityConfig {
                                 "/swagger-resources/**",
                                 "/webjars/**",
                                 "/invitations").permitAll()
-                        .requestMatchers("/api/purchase/**").permitAll()
+                        .requestMatchers("/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 // 기본 폼 로그인 비활성화
